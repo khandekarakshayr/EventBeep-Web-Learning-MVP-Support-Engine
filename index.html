@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beep AI Learning - Final Production Build</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        .beep-yellow { background-color: #FFCC00; }
+        .text-beep-yellow { color: #FFCC00; }
+        .beep-black { background-color: #111111; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const ALL_COURSES = [
+            { id: 1, title: "Advanced SEO & Digital Marketing", domain: "Marketing", desc: "Technical SEO, Google Ads, and content strategies.", price: 599 },
+            { id: 2, title: "Financial Modeling & Valuation", domain: "Finance", desc: "Learn to build financial models from scratch.", price: 899 },
+            { id: 3, title: "App & Web Design (UI/UX)", domain: "Design", desc: "Complete UI/UX design with portfolio building.", price: 749 },
+            { id: 4, title: "Data Analytics with Python", domain: "Data", desc: "Master Pandas, NumPy, and Data Visualization.", price: 999 },
+            { id: 5, title: "Advanced Microsoft Excel", domain: "Productivity", desc: "Macros, VLOOKUP, Pivot Tables & Dashboards.", price: 349 },
+            { id: 6, title: "Human Resource Management", domain: "Management", desc: "Recruitment, Payroll, and Employee Relations.", price: 449 },
+            { id: 7, title: "Full-Stack Node.js Development", domain: "Engineering", desc: "Build scalable backend APIs and architecture.", price: 1299 },
+            { id: 8, title: "Graphic Design Masterclass", domain: "Design", desc: "Photoshop, Illustrator, and Brand Identity.", price: 499 },
+            { id: 9, title: "Executive Assistant Training", domain: "Management", desc: "Time management, comms, and organization.", price: 299 },
+            { id: 10, title: "AI Prompt Engineering", domain: "Tech", desc: "Master ChatGPT, Midjourney, and LLMs.", price: 699 }
+        ];
+
+        const QUIZ_QUESTIONS = [
+            { id: 'q1', q: "What is the primary focus of this course module?", options: ['Theoretical History', 'Practical Implementation', 'General Knowledge', 'Basic Concepts'], correct: 'Practical Implementation' },
+            { id: 'q2', q: "Which of the following is a key tool mentioned in this domain?", options: ['Advanced Spreadsheets / Design Suites', 'Hammer and Sickle', 'Typewriters', 'Abacus'], correct: 'Advanced Spreadsheets / Design Suites' },
+            { id: 'q3', q: "How does mastering this skill impact overall business strategy?", options: ['It slows down production', 'It automates and optimizes growth', 'It has no real impact', 'It only helps IT departments'], correct: 'It automates and optimizes growth' },
+            { id: 'q4', q: "What is the most common mistake beginners make in this field?", options: ['Over-complicating early steps', 'Practicing too much', 'Reading too many docs', 'Starting too early'], correct: 'Over-complicating early steps' },
+            { id: 'q5', q: "Which future trend is reshaping this industry?", options: ['Manual labor', 'Artificial Intelligence', 'Paper records', 'Dial-up internet'], correct: 'Artificial Intelligence' }
+        ];
+
+        function App() {
+            const [activeTab, setActiveTab] = useState('explore');
+            const [myCourses, setMyCourses] = useState([ALL_COURSES[0]]);
+            const [openedCourse, setOpenedCourse] = useState(null);
+            const [searchQuery, setSearchQuery] = useState('');
+            const [voiceGender, setVoiceGender] = useState('female');
+            const [activeFeature, setActiveFeature] = useState('content');
+            
+            const [showSummary, setShowSummary] = useState(false);
+            const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+
+            const [quizAnswers, setQuizAnswers] = useState({});
+            const [quizSubmitted, setQuizSubmitted] = useState(false);
+            const [quizScore, setQuizScore] = useState(0);
+
+            const [adminMode, setAdminMode] = useState(false);
+            const [isTakeover, setIsTakeover] = useState(false);
+            const isTakeoverRef = useRef(false); 
+            
+            const [chatMessages, setChatMessages] = useState([
+                { id: 1, sender: 'bot', text: 'Hello there! How can I assist you with your learning journey today?' }
+            ]);
+            const [chatInput, setChatInput] = useState('');
+            const [adminInput, setAdminInput] = useState('');
+            const [flaggedChat, setFlaggedChat] = useState(false);
+            const chatEndRef = useRef(null);
+
+            const [showPayment, setShowPayment] = useState(false);
+            const [paymentStep, setPaymentStep] = useState(1);
+
+            useEffect(() => {
+                chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            }, [chatMessages]);
+
+            const goHome = () => {
+                setOpenedCourse(null);
+                setActiveTab('explore');
+            };
+
+            const toggleCourse = (course) => {
+                if (myCourses.find(c => c.id === course.id)) {
+                    setMyCourses(myCourses.filter(c => c.id !== course.id));
+                } else {
+                    setMyCourses([...myCourses, course]);
+                }
+            };
+
+            const openCourseDetail = (course) => {
+                setOpenedCourse(course);
+                setActiveTab('course_detail');
+                setActiveFeature('content');
+                setQuizAnswers({});
+                setQuizSubmitted(false);
+                setShowSummary(false);
+            };
+
+            const handleTakeoverChat = () => {
+                setIsTakeover(true);
+                isTakeoverRef.current = true; 
+                setChatMessages(prev => [...prev, { id: Date.now(), sender: 'system', text: 'A Human Agent has joined the chat. AI assistant is paused.' }]);
+            };
+
+            const handleReleaseChat = () => {
+                setIsTakeover(false);
+                isTakeoverRef.current = false;
+                setFlaggedChat(false);
+                setChatMessages(prev => [...prev, { id: Date.now(), sender: 'system', text: 'Agent left the chat. AI assistant is back online.' }]);
+            };
+
+            const toggleAdminMode = () => {
+                if (adminMode && isTakeover) handleReleaseChat();
+                setAdminMode(!adminMode);
+            };
+
+            const handleAdminMessage = () => {
+                if (!adminInput.trim()) return;
+                setChatMessages(prev => [...prev, { id: Date.now(), sender: 'admin', text: adminInput }]);
+                setAdminInput('');
+                setFlaggedChat(false);
+            };
+
+            const handleAdminKeyDown = (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleAdminMessage();
+                }
+            };
+
+            const handleUserMessage = () => {
+                if (!chatInput.trim()) return;
+                
+                const userText = chatInput.toLowerCase();
+                setChatMessages(prev => [...prev, { id: Date.now(), sender: 'user', text: chatInput }]);
+                setChatInput('');
+
+                if (isTakeoverRef.current) return;
+
+                let botReply = "";
+                let isHighRisk = false;
+
+                if (userText.includes('scam') || userText.includes('fraud') || userText.includes('legal')) {
+                    isHighRisk = true;
+                    setFlaggedChat(true);
+                    botReply = "I understand your concern. A human agent has been notified and is reviewing this conversation right now.";
+                } else if (userText.includes('fee') || userText.includes('price') || userText.includes('cost')) {
+                    botReply = "Our Micro-Degrees range from ₹299 to ₹1299. Add courses to 'My Desk' and click 'Upgrade' to see your total fee!";
+                } else if (userText.includes('digital') || userText.includes('marketing') || userText.includes('design')) {
+                    botReply = "Great choice! We have top-rated courses in that domain. Would you like to check the syllabus or enroll directly?";
+                } else if (userText.includes('enroll') || userText.includes('yes') || userText.includes('syllabus')) {
+                    botReply = "Awesome. You can find the detailed syllabus in the 'Explore' tab, and add it to your 'My Desk' to start learning!";
+                } else if (userText.includes('hi') || userText.includes('hello')) {
+                    botReply = "Hello! Do you need help finding a course, upgrading to Premium, or understanding our policies?";
+                } else if (userText.includes('refund')) {
+                    botReply = "We offer a 50% refund policy if you are not placed within 6 months. Would you like to connect to an agent to process this?";
+                } else {
+                    const fallbacks = [
+                        "Could you provide a bit more detail so I can assist you better?",
+                        "I didn't quite catch that. Are you asking about courses, fees, or something else?",
+                        "Would you like me to connect you with a human support agent?"
+                    ];
+                    botReply = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+                }
+
+                setTimeout(() => {
+                    if (isTakeoverRef.current) return; 
+                    setChatMessages(prev => [...prev, { id: Date.now() + 1, sender: isHighRisk ? 'system' : 'bot', text: botReply }]);
+                }, 800);
+            };
+
+            const handleUserKeyDown = (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleUserMessage();
+                }
+            };
+
+            const generatePDF = () => {
+                const element = document.getElementById('notes-content');
+                html2pdf().from(element).set({
+                    margin: 1,
+                    filename: `${openedCourse.title.replace(/\s+/g, '_')}_Notes.pdf`,
+                    html2canvas: { scale: 2 },
+                    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+                }).save();
+            };
+
+            const generateSummary = () => {
+                setIsGeneratingSummary(true);
+                setTimeout(() => {
+                    setIsGeneratingSummary(false);
+                    setShowSummary(true);
+                }, 1200);
+            };
+
+            const playAudio = (text) => {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                const voices = window.speechSynthesis.getVoices();
+                let selectedVoice = voiceGender === 'female' 
+                    ? voices.find(v => v.name.includes('Zira') || v.name.includes('Samantha') || (v.name.includes('Female') && v.lang.includes('en')))
+                    : voices.find(v => v.name.includes('David') || v.name.includes('Alex') || (v.name.includes('Male') && v.lang.includes('en')));
+                if (selectedVoice) utterance.voice = selectedVoice;
+                utterance.rate = 0.95; 
+                window.speechSynthesis.speak(utterance);
+            };
+
+            const submitQuiz = () => {
+                let score = 0;
+                Object.keys(quizAnswers).forEach(key => { 
+                    const q = QUIZ_QUESTIONS.find(x => x.id === key);
+                    if (q && q.correct === quizAnswers[key]) score++; 
+                });
+                setQuizScore(score);
+                setQuizSubmitted(true);
+            };
+
+            const renderCourseDetail = () => (
+                <div class="max-w-4xl mx-auto pb-20">
+                    <button onClick={() => setActiveTab('learning')} class="mb-4 text-gray-500 hover:text-black font-bold">
+                        <i class="fa-solid fa-arrow-left mr-2"></i> Back to My Desk
+                    </button>
+                    <div class="bg-white rounded-xl shadow-[4px_4px_0px_0px_rgba(17,17,17,1)] border-2 border-black overflow-hidden">
+                        <div class="beep-yellow p-6 border-b-2 border-black">
+                            <span class="text-xs font-black bg-black text-white px-3 py-1 rounded-full mb-3 inline-block uppercase tracking-widest">{openedCourse.domain}</span>
+                            <h1 class="text-3xl font-black text-black">{openedCourse.title}</h1>
+                            <p class="text-gray-900 mt-2 font-bold">{openedCourse.desc}</p>
+                        </div>
+                        
+                        <div class="flex border-b-2 border-black bg-gray-50">
+                            <button onClick={() => setActiveFeature('content')} class={`flex-1 py-4 font-black transition-all ${activeFeature === 'content' ? 'border-b-4 border-black text-black bg-white' : 'text-gray-500 hover:text-black'}`}>Course Content</button>
+                            <button onClick={() => setActiveFeature('notes')} class={`flex-1 py-4 font-black transition-all ${activeFeature === 'notes' ? 'border-b-4 border-black text-black bg-white' : 'text-gray-500 hover:text-black'}`}>12-Page Notes</button>
+                            <button onClick={() => setActiveFeature('quiz')} class={`flex-1 py-4 font-black transition-all ${activeFeature === 'quiz' ? 'border-b-4 border-black text-black bg-white' : 'text-gray-500 hover:text-black'}`}>Take Quiz</button>
+                        </div>
+
+                        <div class="p-6 md:p-8 min-h-[400px]">
+                            {/* COURSE CONTENT */}
+                            {activeFeature === 'content' && (
+                                <div>
+                                    <div class="border-2 border-black rounded-xl overflow-hidden mb-8">
+                                        <div class="bg-gray-100 p-4 border-b-2 border-black flex justify-between items-center flex-wrap gap-4">
+                                            <h3 class="font-black text-lg">Module 1: Introduction (Free Preview)</h3>
+                                            <div class="flex items-center gap-2">
+                                                <select class="border-2 border-black rounded px-2 py-1 text-sm font-bold bg-white" value={voiceGender} onChange={(e) => setVoiceGender(e.target.value)}>
+                                                    <option value="female">Female Voice</option>
+                                                    <option value="male">Male Voice</option>
+                                                </select>
+                                                <button onClick={() => playAudio(`Welcome to Module 1 of ${openedCourse.title}. In this section, we explore the core principles that drive success.`)} class="bg-black text-white px-4 py-1.5 rounded font-bold hover:bg-gray-800 transition text-sm whitespace-nowrap">
+                                                    <i class="fa-solid fa-play mr-1"></i> Play
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="p-6 text-gray-800 leading-relaxed text-lg font-medium">
+                                            Welcome to the foundational module of {openedCourse.title}. In this section, we explore the core principles that drive success in {openedCourse.domain}. Understanding these basics is critical before moving on to advanced frameworks, industry case studies, and hands-on execution.
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="text-center pb-6 border-b-2 border-dashed border-gray-300 mb-6">
+                                        <p class="text-gray-500 text-sm font-bold">--- End of Free Preview (Module 1). Full course content is unlocked in the Premium Tier. ---</p>
+                                    </div>
+
+                                    {/* Additional Locked Modules for Justification */}
+                                    <div class="space-y-4">
+                                        <div onClick={() => setShowPayment(true)} class="cursor-pointer bg-gray-50 border-2 border-gray-300 rounded-xl p-4 flex justify-between items-center opacity-80 hover:opacity-100 hover:border-black transition-all group">
+                                            <h3 class="font-black text-gray-600 group-hover:text-black transition-colors"><i class="fa-solid fa-lock mr-2"></i> Module 2: Advanced Strategies</h3>
+                                            <span class="bg-yellow-400 text-black text-xs font-black px-3 py-1 rounded-full">PRO</span>
+                                        </div>
+                                        <div onClick={() => setShowPayment(true)} class="cursor-pointer bg-gray-50 border-2 border-gray-300 rounded-xl p-4 flex justify-between items-center opacity-80 hover:opacity-100 hover:border-black transition-all group">
+                                            <h3 class="font-black text-gray-600 group-hover:text-black transition-colors"><i class="fa-solid fa-lock mr-2"></i> Module 3: Hands-on Projects & Execution</h3>
+                                            <span class="bg-yellow-400 text-black text-xs font-black px-3 py-1 rounded-full">PRO</span>
+                                        </div>
+                                        <div onClick={() => setShowPayment(true)} class="cursor-pointer bg-gray-50 border-2 border-gray-300 rounded-xl p-4 flex justify-between items-center opacity-80 hover:opacity-100 hover:border-black transition-all group">
+                                            <h3 class="font-black text-gray-600 group-hover:text-black transition-colors"><i class="fa-solid fa-lock mr-2"></i> Module 4: Industry Case Studies</h3>
+                                            <span class="bg-yellow-400 text-black text-xs font-black px-3 py-1 rounded-full">PRO</span>
+                                        </div>
+                                        <div onClick={() => setShowPayment(true)} class="cursor-pointer bg-gray-50 border-2 border-gray-300 rounded-xl p-4 flex justify-between items-center opacity-80 hover:opacity-100 hover:border-black transition-all group">
+                                            <h3 class="font-black text-gray-600 group-hover:text-black transition-colors"><i class="fa-solid fa-lock mr-2"></i> Module 5: Final Certification Exam</h3>
+                                            <span class="bg-yellow-400 text-black text-xs font-black px-3 py-1 rounded-full">PRO</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 12-PAGE NOTES & GIST */}
+                            {activeFeature === 'notes' && (
+                                <div>
+                                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                                        <h3 class="font-black text-2xl"><i class="fa-solid fa-file-lines text-yellow-500 mr-2"></i> Auto-Generated Notes</h3>
+                                        <div class="flex gap-3">
+                                            <button onClick={generateSummary} disabled={isGeneratingSummary || showSummary} class={`border-2 border-black text-black px-4 py-2 rounded font-black transition-colors flex items-center ${showSummary ? 'opacity-50' : 'hover:bg-yellow-400'}`}>
+                                                {isGeneratingSummary ? <i class="fa-solid fa-spinner fa-spin mr-2"></i> : <i class="fa-solid fa-wand-magic-sparkles mr-2 text-blue-600"></i>}
+                                                AI Gist
+                                            </button>
+                                            <button onClick={generatePDF} class="border-2 border-black text-white bg-black px-4 py-2 rounded font-black hover:bg-gray-800 transition-colors flex items-center">
+                                                <i class="fa-solid fa-download mr-2 text-yellow-400"></i> Download PDF
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {showSummary && (
+                                        <div class="bg-blue-50 border-2 border-blue-400 rounded-xl p-6 mb-8 animate-fade-in relative shadow-sm">
+                                            <button onClick={() => setShowSummary(false)} class="absolute top-4 right-4 text-blue-400 hover:text-blue-600"><i class="fa-solid fa-times"></i></button>
+                                            <h4 class="font-black text-blue-800 mb-3 flex items-center"><i class="fa-solid fa-bolt mr-2"></i> Chapter 1 & 2 Quick Summary</h4>
+                                            <ul class="list-disc pl-5 text-blue-900 font-medium space-y-2">
+                                                <li><strong>Foundation is critical:</strong> Deep understanding of user intent leads to better advanced strategy execution.</li>
+                                                <li><strong>Data-driven focus:</strong> Analytics should drive all key decision-making processes.</li>
+                                                <li><strong>Iterative process:</strong> Continuous prototyping and testing prevent costly mistakes.</li>
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    <div id="notes-content" class="bg-yellow-50 p-8 rounded-xl border-2 border-yellow-300 font-serif">
+                                        <h1 class="text-3xl font-black mb-6 text-center border-b-2 border-yellow-300 pb-4">{openedCourse.title} - Full Study Guide</h1>
+                                        <h2 class="text-xl font-bold mb-2 mt-6">Chapter 1: The Core Foundation</h2>
+                                        <p class="mb-4 text-gray-800 leading-relaxed">The bedrock of {openedCourse.domain} lies in understanding user intent and market dynamics. Without a solid foundation, advanced strategies often fail.</p>
+                                        <h2 class="text-xl font-bold mb-2 mt-6">Chapter 2: Key Methodologies</h2>
+                                        <ul class="list-disc pl-6 mb-4 text-gray-800 space-y-2">
+                                            <li>Data-driven decision making and analytics.</li>
+                                            <li>Iterative prototyping and continuous testing.</li>
+                                        </ul>
+                                        <p class="text-center text-gray-400 text-sm mt-12 font-sans italic border-t pt-4">--- End of Preview (Pages 1 to 3). Full 12-page extensive document included in premium tier. ---</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* QUIZ (WITH RIGHT/WRONG FEEDBACK) */}
+                            {activeFeature === 'quiz' && (
+                                <div>
+                                    <div class="flex justify-between items-center mb-6">
+                                        <h3 class="font-black text-2xl">Module Evaluation Quiz</h3>
+                                        <span class="bg-gray-100 text-gray-600 font-black px-3 py-1 rounded text-sm">5 Questions</span>
+                                    </div>
+                                    
+                                    {!quizSubmitted ? (
+                                        <div class="space-y-8 animate-fade-in">
+                                            {QUIZ_QUESTIONS.map((q, idx) => (
+                                                <div key={q.id} class="p-6 border-2 border-gray-200 rounded-xl hover:border-black transition-colors">
+                                                    <p class="font-black text-lg mb-4">{idx + 1}. {q.q}</p>
+                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                        {q.options.map((opt, i) => (
+                                                            <label key={i} class={`flex items-center space-x-3 p-3 border-2 rounded-lg cursor-pointer transition-colors ${quizAnswers[q.id] === opt ? 'border-black bg-yellow-50' : 'border-gray-200 hover:bg-gray-50'}`}>
+                                                                <input type="radio" name={q.id} checked={quizAnswers[q.id] === opt} onChange={() => setQuizAnswers({...quizAnswers, [q.id]: opt})} class="w-4 h-4 text-black focus:ring-black" />
+                                                                <span class="font-medium text-gray-800">{opt}</span>
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <button onClick={submitQuiz} disabled={Object.keys(quizAnswers).length < 5} class={`w-full py-4 rounded-xl font-black text-lg transition-colors shadow-sm ${Object.keys(quizAnswers).length === 5 ? 'bg-black text-white hover:bg-gray-800 shadow-[4px_4px_0px_0px_#FFCC00]' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>
+                                                Submit Answers
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div class="animate-fade-in">
+                                            <div class="text-center py-8 mb-8 bg-gray-50 border-2 border-black rounded-xl">
+                                                <i class="fa-solid fa-trophy text-5xl text-yellow-400 mb-3"></i>
+                                                <h2 class="text-3xl font-black mb-2">Quiz Completed!</h2>
+                                                <p class="text-xl font-bold text-gray-600 mb-6">You scored {quizScore} out of 5.</p>
+                                                <button onClick={() => { setQuizSubmitted(false); setQuizAnswers({}); }} class="border-2 border-black text-black px-6 py-2 rounded-xl font-black hover:bg-yellow-400 transition-colors">
+                                                    <i class="fa-solid fa-rotate-right mr-2"></i> Retake Quiz
+                                                </button>
+                                            </div>
+
+                                            <h3 class="font-black text-xl mb-6 border-b-2 border-gray-200 pb-2">Review Your Answers</h3>
+                                            <div class="space-y-6">
+                                                {QUIZ_QUESTIONS.map((q, idx) => {
+                                                    const userAnswer = quizAnswers[q.id];
+                                                    const isCorrect = userAnswer === q.correct;
+                                                    return (
+                                                        <div key={q.id} class={`p-6 border-2 rounded-xl ${isCorrect ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'}`}>
+                                                            <div class="flex items-start justify-between mb-4">
+                                                                <p class="font-black text-lg text-gray-900">{idx + 1}. {q.q}</p>
+                                                                {isCorrect ? (
+                                                                    <span class="text-green-600 font-black flex items-center"><i class="fa-solid fa-check-circle mr-1"></i> Correct</span>
+                                                                ) : (
+                                                                    <span class="text-red-600 font-black flex items-center"><i class="fa-solid fa-xmark-circle mr-1"></i> Incorrect</span>
+                                                                )}
+                                                            </div>
+                                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                                {q.options.map((opt, i) => {
+                                                                    let optionClass = "border-gray-300 bg-white opacity-60";
+                                                                    let icon = null;
+                                                                    if (opt === q.correct) {
+                                                                        optionClass = "border-green-500 bg-green-100 font-bold text-green-900 opacity-100";
+                                                                        icon = <i class="fa-solid fa-check text-green-600 absolute right-4"></i>;
+                                                                    } else if (opt === userAnswer && !isCorrect) {
+                                                                        optionClass = "border-red-500 bg-red-100 font-bold text-red-900 opacity-100";
+                                                                        icon = <i class="fa-solid fa-xmark text-red-600 absolute right-4"></i>;
+                                                                    }
+                                                                    return (
+                                                                        <div key={i} class={`relative flex items-center p-3 border-2 rounded-lg ${optionClass}`}>
+                                                                            <div class={`w-4 h-4 rounded-full border-2 mr-3 flex-shrink-0 flex items-center justify-center ${opt === userAnswer ? 'border-black bg-black' : 'border-gray-400'}`}>
+                                                                                {opt === userAnswer && <div class="w-1.5 h-1.5 bg-white rounded-full"></div>}
+                                                                            </div>
+                                                                            <span class="pr-6">{opt}</span>
+                                                                            {icon}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+
+            // PAYMENT MODAL
+            const renderPaymentModal = () => {
+                if(!showPayment) return null;
+                const cartCourses = myCourses.length > 0 ? myCourses : [ALL_COURSES[0]]; 
+                const totalFee = cartCourses.reduce((sum, course) => sum + course.price, 0);
+
+                return (
+                    <div class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+                        <div class="bg-white rounded-2xl overflow-hidden shadow-2xl max-w-3xl w-full flex flex-col md:flex-row relative">
+                            <button onClick={() => setShowPayment(false)} class="absolute top-4 right-4 text-gray-500 hover:text-black z-10"><i class="fa-solid fa-xmark text-2xl"></i></button>
+                            
+                            <div class="w-full md:w-1/2 bg-gray-100 p-8 flex flex-col justify-center border-b md:border-b-0 md:border-r border-gray-200">
+                                <div class="bg-black text-white p-6 rounded-xl mb-6 shadow-lg transform -rotate-2">
+                                    <span class="text-yellow-400 text-xs font-black tracking-widest uppercase mb-1 block">Premium Bundle</span>
+                                    <h2 class="text-2xl font-black leading-tight">{myCourses.length > 1 ? `${myCourses.length} Courses Selected` : cartCourses[0].title}</h2>
+                                    <div class="mt-4 pt-4 border-t border-gray-700 flex justify-between items-center text-sm font-bold">
+                                        <span><i class="fa-solid fa-clock mr-1 text-yellow-400"></i> Lifetime Access</span>
+                                        <span class="bg-yellow-400 text-black px-2 py-0.5 rounded text-xs font-black">₹{totalFee}</span>
+                                    </div>
+                                </div>
+                                <h3 class="font-black text-xl mb-2">Unlock Full Potential</h3>
+                                <p class="text-gray-600 text-sm leading-relaxed">Unlock all modules, AI Summaries, extensive 12-page notes, and interactive quizzes for your selected courses.</p>
+                            </div>
+
+                            <div class="w-full md:w-1/2 p-8 bg-white flex flex-col justify-center">
+                                {paymentStep === 1 && (
+                                    <div class="animate-fade-in">
+                                        <h3 class="text-2xl font-black mb-6">Payment Summary</h3>
+                                        <div class="max-h-32 overflow-y-auto mb-4 hide-scrollbar">
+                                            {cartCourses.map((c, i) => (
+                                                <div key={i} class="flex justify-between items-center mb-3 text-sm text-gray-700 font-bold border-b border-gray-100 pb-2">
+                                                    <span class="truncate pr-4">{c.title}</span>
+                                                    <span>₹{c.price}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div class="flex justify-between items-center mb-8 pb-4 border-t-2 border-gray-200 pt-4 text-xl font-black">
+                                            <span>Total Amount</span>
+                                            <span>₹{totalFee}</span>
+                                        </div>
+                                        <button onClick={() => setPaymentStep(2)} class="w-full beep-yellow text-black font-black py-4 rounded-xl hover:bg-yellow-500 transition-colors shadow-sm">
+                                            Continue to Payment
+                                        </button>
+                                    </div>
+                                )}
+                                {paymentStep === 2 && (
+                                    <div class="animate-fade-in">
+                                        <h3 class="text-xl font-black mb-2">Enter details to continue</h3>
+                                        <p class="text-gray-500 text-sm font-bold mb-6">We'll send an OTP to verify your number.</p>
+                                        <div class="relative mb-6">
+                                            <span class="absolute left-4 top-3.5 text-gray-500 font-bold">+91</span>
+                                            <input type="tel" placeholder="Enter mobile number" class="w-full border-2 border-gray-300 rounded-xl p-3 pl-12 font-bold focus:border-black focus:outline-none" />
+                                        </div>
+                                        <button onClick={() => setPaymentStep(3)} class="w-full bg-black text-white font-black py-4 rounded-xl hover:bg-gray-800 transition-colors">
+                                            Send OTP
+                                        </button>
+                                    </div>
+                                )}
+                                {paymentStep === 3 && (
+                                    <div class="animate-fade-in">
+                                        <h3 class="text-xl font-black mb-6">Enter OTP</h3>
+                                        <input type="text" placeholder="1 2 3 4" class="w-full border-2 border-gray-300 rounded-xl p-3 text-center tracking-widest text-xl font-black focus:border-black focus:outline-none mb-6" />
+                                        <button onClick={() => setPaymentStep(4)} class="w-full bg-black text-white font-black py-4 rounded-xl hover:bg-gray-800 transition-colors">
+                                            Verify & Proceed
+                                        </button>
+                                    </div>
+                                )}
+                                {paymentStep === 4 && (
+                                    <div class="animate-fade-in">
+                                        <h3 class="text-xl font-black mb-6">Payment Details</h3>
+                                        <input type="text" placeholder="Cardholder Name" class="w-full border-2 border-gray-300 rounded-xl p-3 font-bold focus:border-black focus:outline-none mb-4" />
+                                        <input type="text" placeholder="Card Number" class="w-full border-2 border-gray-300 rounded-xl p-3 font-bold focus:border-black focus:outline-none mb-4" />
+                                        <div class="flex gap-4 mb-6">
+                                            <input type="text" placeholder="MM/YY" class="w-1/2 border-2 border-gray-300 rounded-xl p-3 font-bold focus:border-black focus:outline-none" />
+                                            <input type="text" placeholder="CVV" class="w-1/2 border-2 border-gray-300 rounded-xl p-3 font-bold focus:border-black focus:outline-none" />
+                                        </div>
+                                        <button onClick={() => setPaymentStep(5)} class="w-full bg-black text-white font-black py-4 rounded-xl hover:bg-gray-800 transition-colors">
+                                            Pay ₹{totalFee}
+                                        </button>
+                                    </div>
+                                )}
+                                {paymentStep === 5 && (
+                                    <div class="animate-fade-in text-center py-8">
+                                        <div class="w-16 h-16 bg-green-100 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                                            <i class="fa-solid fa-check"></i>
+                                        </div>
+                                        <h3 class="text-2xl font-black mb-2">Payment Successful!</h3>
+                                        <p class="text-gray-600 font-bold mb-8">Premium features unlocked for your selected courses.</p>
+                                        <button onClick={() => {setShowPayment(false); setPaymentStep(1);}} class="border-2 border-black text-black font-black py-3 px-8 rounded-xl hover:bg-gray-100 transition-colors">
+                                            Go to Courses
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div class="flex flex-col h-screen bg-gray-50 relative">
+                    {/* NAVBAR */}
+                    <nav class="beep-black text-white p-4 flex justify-between items-center z-10 sticky top-0 shadow-lg">
+                        <div onClick={goHome} class="font-black text-2xl flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
+                            <div class="bg-yellow-400 text-black rounded-full w-10 h-10 flex items-center justify-center pt-1 shadow-sm">
+                                <span class="text-sm font-black transform -rotate-12">Beep</span>
+                            </div>
+                            Learning
+                        </div>
+                        <div class="flex gap-4 md:gap-8 font-black text-gray-400 items-center text-sm md:text-base">
+                            <button onClick={() => setActiveTab('explore')} class={activeTab === 'explore' ? 'text-beep-yellow border-b-4 border-yellow-400 pb-1' : 'hover:text-white transition-colors'}>Explore</button>
+                            <button onClick={() => setActiveTab('learning')} class={activeTab === 'learning' || activeTab === 'course_detail' ? 'text-beep-yellow border-b-4 border-yellow-400 pb-1 flex items-center gap-2' : 'hover:text-white transition-colors flex items-center gap-2'}>
+                                My Desk <span class="bg-yellow-400 text-black text-xs px-2 py-0.5 rounded-full">{myCourses.length}</span>
+                            </button>
+                            <button onClick={() => setActiveTab('support')} class={activeTab === 'support' ? 'text-beep-yellow border-b-4 border-yellow-400 pb-1 flex items-center gap-2' : 'hover:text-white transition-colors flex items-center gap-2'}>
+                                <i class="fa-solid fa-headset"></i> Support
+                            </button>
+                        </div>
+                    </nav>
+
+                    {/* MAIN CONTENT */}
+                    <main class="flex-grow overflow-auto p-4 md:p-10 w-full hide-scrollbar">
+                        
+                        {activeTab === 'explore' && (
+                            <div class="max-w-6xl mx-auto pb-20">
+                                <div class="beep-yellow p-8 md:p-16 rounded-3xl mb-12 text-center border-4 border-black shadow-[8px_8px_0px_0px_rgba(17,17,17,1)] relative overflow-hidden">
+                                    <i class="fa-solid fa-graduation-cap absolute -right-10 -top-10 text-[150px] text-yellow-500 opacity-50 transform rotate-12"></i>
+                                    <h1 class="text-4xl md:text-6xl font-black text-black mb-8 relative z-10">Learn Skills that Matter.</h1>
+                                    <div class="relative max-w-3xl mx-auto z-10">
+                                        <div class="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                                            <i class="fa-solid fa-search text-black text-xl"></i>
+                                        </div>
+                                        <input 
+                                            type="text" 
+                                            placeholder="Search 'Excel', 'UI/UX' or 'Marketing'..." 
+                                            class="w-full py-5 pl-14 pr-6 rounded-full border-4 border-black focus:outline-none text-xl font-bold shadow-[4px_4px_0px_0px_rgba(17,17,17,1)]"
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                    {ALL_COURSES.filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()) || c.domain.toLowerCase().includes(searchQuery.toLowerCase())).map(course => (
+                                        <div key={course.id} class="bg-white rounded-2xl p-6 border-2 border-gray-200 hover:border-black transition-all flex flex-col h-full shadow-sm hover:shadow-[4px_4px_0px_0px_rgba(17,17,17,1)]">
+                                            <div class="flex justify-between items-center mb-4">
+                                                <span class="text-[10px] font-black bg-gray-100 text-gray-500 px-3 py-1 rounded-full tracking-widest uppercase">{course.domain}</span>
+                                                <span class="font-black text-gray-800">₹{course.price}</span>
+                                            </div>
+                                            <h3 class="text-2xl font-black mb-3 leading-tight">{course.title}</h3>
+                                            <p class="text-gray-600 font-medium mb-6 flex-grow">{course.desc}</p>
+                                            <button 
+                                                onClick={() => toggleCourse(course)}
+                                                class={`w-full py-4 rounded-xl font-black border-2 transition-all ${myCourses.find(c => c.id === course.id) ? 'border-red-500 text-red-500 hover:bg-red-50' : 'beep-yellow border-black text-black hover:bg-yellow-300'}`}
+                                            >
+                                                {myCourses.find(c => c.id === course.id) ? 'Remove from Desk' : 'Add to My Desk'}
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'learning' && (
+                            <div class="max-w-4xl mx-auto pb-20">
+                                <h1 class="text-4xl md:text-5xl font-black mb-10 text-black border-b-4 border-yellow-400 inline-block pb-2">My Desk</h1>
+                                
+                                {myCourses.length === 0 ? (
+                                    <div class="text-center py-20 bg-white border-2 border-dashed border-gray-300 rounded-2xl">
+                                        <i class="fa-solid fa-folder-open text-6xl text-gray-300 mb-4"></i>
+                                        <h2 class="text-2xl font-black text-gray-500">Your desk is empty</h2>
+                                        <p class="text-gray-400 font-bold mt-2 mb-6">Add courses from the Explore tab to start learning.</p>
+                                        <button onClick={() => setActiveTab('explore')} class="bg-black text-white px-8 py-3 rounded-xl font-black">Explore Courses</button>
+                                    </div>
+                                ) : (
+                                    <div class="grid grid-cols-1 gap-6">
+                                        {myCourses.map(course => (
+                                            <div key={course.id} class="bg-white rounded-2xl p-6 md:p-8 border-2 border-black shadow-[4px_4px_0px_0px_rgba(17,17,17,1)] flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
+                                                <div class="absolute top-0 right-0 w-2 h-full bg-yellow-400"></div>
+                                                <div class="flex-grow w-full">
+                                                    <span class="text-[10px] font-black bg-black text-yellow-400 px-3 py-1 rounded-full mb-3 inline-block uppercase tracking-widest">{course.domain}</span>
+                                                    <h3 class="text-2xl md:text-3xl font-black mb-4 leading-tight">{course.title}</h3>
+                                                    <div class="w-full bg-gray-100 rounded-full h-3 border border-gray-300 overflow-hidden">
+                                                        <div class="bg-green-500 h-full w-0"></div>
+                                                    </div>
+                                                    <p class="text-[10px] text-gray-500 mt-2 font-black tracking-widest uppercase">0% Completed</p>
+                                                </div>
+                                                <button 
+                                                    onClick={() => openCourseDetail(course)}
+                                                    class="bg-black text-white px-8 py-4 rounded-xl font-black hover:bg-gray-800 w-full md:w-auto text-center border-2 border-black whitespace-nowrap transition-transform hover:-translate-y-1"
+                                                >
+                                                    Open Course <i class="fa-solid fa-arrow-right ml-2"></i>
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {activeTab === 'course_detail' && openedCourse && renderCourseDetail()}
+
+                        {activeTab === 'support' && (
+                            <div class="max-w-6xl mx-auto h-[750px] flex flex-col md:flex-row gap-8 pb-10">
+                                
+                                <div class={`flex flex-col bg-white rounded-2xl shadow-[4px_4px_0px_0px_rgba(17,17,17,1)] border-2 border-black overflow-hidden flex-grow transition-all duration-300 ${adminMode ? 'w-full md:w-1/2' : 'w-full max-w-3xl mx-auto'}`}>
+                                    <div class="beep-yellow border-b-2 border-black p-5 flex justify-between items-center bg-yellow-400">
+                                        <div>
+                                            <h2 class="font-black text-xl text-black flex items-center"><i class="fa-solid fa-robot text-2xl mr-3"></i> Beep AI Support</h2>
+                                            <p class="text-xs text-gray-800 font-black mt-1 tracking-widest uppercase">Typically replies instantly</p>
+                                        </div>
+                                        <div class="flex items-center gap-3 bg-white px-4 py-2 border-2 border-black rounded-xl cursor-pointer hover:bg-gray-50" onClick={toggleAdminMode}>
+                                            <span class="text-xs font-black tracking-widest uppercase">Staff Monitor</span>
+                                            <div class={`w-12 h-6 rounded-full relative transition-colors border-2 border-black ${adminMode ? 'bg-black' : 'bg-gray-200'}`}>
+                                                <div class={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${adminMode ? 'transform translate-x-6' : ''}`}></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="flex-grow p-6 overflow-y-auto bg-gray-50 flex flex-col gap-4 hide-scrollbar">
+                                        {chatMessages.map((msg) => (
+                                            <div key={msg.id} class={`max-w-[85%] p-4 rounded-2xl border-2 font-medium text-[15px] ${
+                                                msg.sender === 'bot' ? 'bg-white border-gray-200 self-start rounded-tl-none text-black shadow-sm' : 
+                                                msg.sender === 'system' ? 'bg-red-50 border-red-400 self-center text-red-800 text-sm font-bold w-full text-center' :
+                                                msg.sender === 'admin' ? 'bg-green-50 border-green-500 self-start rounded-tl-none text-black shadow-sm' : 
+                                                'bg-black text-white self-end rounded-tr-none border-black'
+                                            }`}>
+                                                {msg.sender === 'admin' && <span class="text-[10px] block text-green-600 mb-1 font-black uppercase tracking-widest"><i class="fa-solid fa-headset mr-1"></i> Support Agent</span>}
+                                                {msg.text}
+                                            </div>
+                                        ))}
+                                        <div ref={chatEndRef} />
+                                    </div>
+                                    <div class="p-4 border-t-2 border-black bg-white flex gap-3 relative">
+                                        {isTakeover && (
+                                            <div class="absolute inset-0 bg-gray-100 bg-opacity-90 flex items-center justify-center z-10 font-bold text-gray-500">
+                                                <i class="fa-solid fa-lock mr-2"></i> User input disabled during Agent Override
+                                            </div>
+                                        )}
+                                        <input 
+                                            type="text" 
+                                            class="flex-grow p-4 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-black font-medium"
+                                            placeholder="Type your issue..."
+                                            value={chatInput}
+                                            onChange={(e) => setChatInput(e.target.value)}
+                                            onKeyDown={handleUserKeyDown}
+                                            disabled={isTakeover}
+                                        />
+                                        <button onClick={handleUserMessage} disabled={isTakeover} class={`px-8 rounded-xl font-black transition-transform ${isTakeover ? 'bg-gray-300 text-gray-500' : 'bg-black text-white hover:bg-gray-800 hover:scale-105'}`}><i class="fa-solid fa-paper-plane"></i></button>
+                                    </div>
+                                </div>
+
+                                {adminMode && (
+                                    <div class="w-full md:w-1/2 flex flex-col bg-gray-900 text-white rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] border-2 border-black overflow-hidden relative animate-fade-in">
+                                        <div class="p-5 border-b border-gray-700 flex justify-between items-center bg-black">
+                                            <h2 class="font-black text-xl flex items-center"><i class="fa-solid fa-shield-halved text-yellow-400 mr-3 text-2xl"></i> HITL Admin Monitor</h2>
+                                        </div>
+                                        
+                                        <div class="flex-grow p-6 flex flex-col">
+                                            <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 mb-6 flex-grow">
+                                                <h3 class="text-gray-400 text-xs font-black mb-4 tracking-widest uppercase">Live Intercepts</h3>
+                                                {flaggedChat ? (
+                                                    <div class="animate-fade-in">
+                                                        <div class="flex items-center gap-2 mb-4">
+                                                            <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                                                            <p class="text-white font-bold text-sm">User queried high-risk topics (Scam/Legal/Refund).</p>
+                                                        </div>
+                                                        {!isTakeover ? (
+                                                            <button onClick={handleTakeoverChat} class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-4 rounded-xl font-black w-full text-lg transition-transform hover:-translate-y-1 shadow-lg shadow-blue-900/50 flex justify-center items-center">
+                                                                <i class="fa-solid fa-hand text-xl mr-3"></i> Takeover Chat
+                                                            </button>
+                                                        ) : (
+                                                            <div class="bg-green-900 border border-green-500 text-green-300 font-bold p-4 rounded-xl flex items-start gap-3">
+                                                                <i class="fa-solid fa-lock mt-1"></i>
+                                                                <p class="text-sm">Chat taken over. AI auto-responses are now strictly disabled.</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div class="h-full flex flex-col items-center justify-center opacity-50">
+                                                        <div class="w-16 h-16 rounded-full bg-gray-700 flex items-center justify-center mb-4">
+                                                            <i class="fa-solid fa-check text-2xl text-gray-400"></i>
+                                                        </div>
+                                                        <p class="font-bold text-gray-400">No flagged conversations currently.</p>
+                                                        {!isTakeover && (
+                                                            <button onClick={handleTakeoverChat} class="mt-6 bg-gray-700 hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-bold transition-colors">
+                                                                Force Takeover
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div class={`transition-all duration-300 ${isTakeover ? 'opacity-100 translate-y-0' : 'opacity-50 translate-y-4 pointer-events-none'}`}>
+                                                <div class="bg-black border border-gray-700 p-4 rounded-xl">
+                                                    <label class="block text-[10px] text-blue-400 font-black mb-2 tracking-widest uppercase">Manual Agent Override</label>
+                                                    <textarea 
+                                                        class="w-full p-4 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 mb-3 resize-none font-medium text-sm"
+                                                        rows="3"
+                                                        placeholder="Type response as Support Agent and press Enter..."
+                                                        value={adminInput}
+                                                        onChange={(e) => setAdminInput(e.target.value)}
+                                                        onKeyDown={handleAdminKeyDown}
+                                                    ></textarea>
+                                                    <div class="flex justify-between items-center">
+                                                        <button onClick={handleReleaseChat} class="text-gray-400 hover:text-white px-3 py-2 font-bold text-xs">Release Chat</button>
+                                                        <button onClick={handleAdminMessage} class="bg-green-600 hover:bg-green-500 px-6 py-2.5 rounded-lg font-black text-sm text-white flex items-center">
+                                                            Send Message <i class="fa-solid fa-paper-plane ml-2"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </main>
+
+                    {/* GLOBAL FLOATING PREMIUM BUTTON */}
+                    <button 
+                        onClick={() => setShowPayment(true)}
+                        class="fixed bottom-6 right-6 bg-black text-yellow-400 border-2 border-yellow-400 px-6 py-3 rounded-full font-black text-sm md:text-base shadow-[0px_4px_16px_rgba(0,0,0,0.5)] hover:scale-105 transition-transform z-40 flex items-center gap-2"
+                    >
+                        <i class="fa-solid fa-gem"></i> Upgrade to Premium
+                    </button>
+
+                    {renderPaymentModal()}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
